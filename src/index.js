@@ -16,6 +16,19 @@ function verifyIfCPFAlreadyExists(request, response, next){
         request.customer = customer;
         return next();
     }
+} 
+
+function getBalance(statement){
+    const balance = statement.reduce((acc, operation) => {
+        if(operation.type === 'credit'){
+            return acc + operation.amount;
+        }
+        else if(operation.type === "debit"){
+            return acc - operation.amount;
+        }
+    }, 0);
+
+    return balance;
 }
 
 const app = express();
@@ -44,12 +57,14 @@ app.post('/account', (request, response) => {
     response.status(201).send();
 })
 
-app.get('/statement', verifyIfCPFAlreadyExists, (request, response) => {
+app.use(verifyIfCPFAlreadyExists);
+
+app.get('/statement', (request, response) => {
     const { customer } = request;
     return response.json(customer.statement);
 })
 
-app.post('/deposit', verifyIfCPFAlreadyExists, (request, response) => {
+app.post('/deposit', (request, response) => {
     const { description, amount } = request.body;
     const { customer } = request;
 
@@ -62,6 +77,26 @@ app.post('/deposit', verifyIfCPFAlreadyExists, (request, response) => {
 
     customer.statement.push(statementOperation);
     return response.status(201).send();
+})
+
+app.post('/withdraw', (request, response) => {
+    const { amount } = request.body;
+    const { customer } = request;
+
+    const balance = getBalance(customer.statement);
+
+    if(balance < amount){
+        return response.status(400).send({error: "Insufficient founds!"});
+    }
+    
+    const statementOperation = {
+        amount,
+        createdAt: new Date(),
+        type: "debit"
+    }
+
+    customer.statement.push(statementOperation);
+    response.status(201).send();
 })
 
 app.listen(3000);
